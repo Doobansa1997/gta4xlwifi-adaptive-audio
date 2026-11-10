@@ -1,0 +1,11 @@
+/build/
+/dist/
+/inputs/
+/third-party/
+__pycache__/
+*.pyc
+.DS_Store
+*.img
+*.zip
+*.bak
+*.log

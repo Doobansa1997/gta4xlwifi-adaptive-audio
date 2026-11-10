@@ -1,0 +1,35 @@
+name: Compatibility or installation report
+description: Report a refusal or a problem on the supported device
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Experimental, SM-P610 only. Do not upload firmware, cache backups or unredacted logs.
+        If writes failed, stay in recovery and follow the restore instructions before booting.
+  - type: input
+    id: device
+    attributes:
+      label: Model and device codename
+      placeholder: SM-P610 / gta4xlwifi
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Exact LineageOS and recovery versions
+    validations:
+      required: true
+  - type: textarea
+    id: operation
+    attributes:
+      label: Operation and starting state
+      description: Preflight, install or restore? Was vendor original or already patched? Local build revision?
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Exact error and redacted relevant log excerpt
+      description: Remove serial numbers, account names, personal paths and app/user information.
+    validations:
+      required: true
