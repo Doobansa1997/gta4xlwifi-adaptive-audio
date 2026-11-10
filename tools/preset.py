@@ -1,12 +1,15 @@
 """Conservative speaker preset; firmware XML must be supplied locally."""
 
 import hashlib
+import os
 from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "build"
+# Prefer the pinned host tools over older distribution versions without --cat.
+os.environ["PATH"] = str(BUILD / "host-bin") + os.pathsep + os.environ.get("PATH", "")
 VENDOR_TREE = BUILD / "vendor"
 FILES = (
     "etc/audio_policy_volumes.xml",

@@ -19,21 +19,48 @@ def run(*args, **kwargs):
     subprocess.run(args, check=True, **kwargs)
 
 
+def build_host():
+    objects = ROOT / "build/host-objects"
+    objects.mkdir(exist_ok=True)
+    for name in ("lz4", "lz4hc"):
+        run(os.environ.get("CC", "cc"), "-O2", "-c", str(LZ4 / f"{name}.c"),
+            "-o", str(objects / f"{name}.o"))
+    run(os.environ.get("AR", "ar"), "rcs", str(objects / "liblz4.a"),
+        str(objects / "lz4.o"), str(objects / "lz4hc.o"))
+    run(os.environ.get("CXX", "c++"), "-std=c++17", "-O2", "-Wall", "-Wextra", "-Werror",
+        "-I" + str(LZ4), "-I" + str(THIRD),
+        str(ROOT / "src/adaptive.cpp"), str(objects / "liblz4.a"),
+        "-lz", "-o", str(ROOT / "build/audio-adaptive-host"))
+    build = ROOT / "build/host-erofs"
+    build.mkdir(exist_ok=True)
+    out = ROOT / "build/host-bin"
+    out.mkdir(exist_ok=True)
+    env = os.environ.copy()
+    env.update({
+        "CFLAGS": "-O2", "LDFLAGS": f"-L{objects}",
+        "PKG_CONFIG_LIBDIR": str(objects / "no-host-pkgconfig"),
+        "liblz4_CFLAGS": f"-I{LZ4}", "liblz4_LIBS": str(objects / "liblz4.a"),
+    })
+    if not (EROFS / "configure").exists():
+        run("./autogen.sh", cwd=EROFS)
+    run(str(EROFS / "configure"), "--disable-shared", "--enable-static",
+        "--disable-multithreading", "--enable-lz4", "--disable-lzma",
+        "--without-zlib", "--without-uuid", "--without-libcurl", "--without-openssl",
+        "--without-libxml2", "--without-json-c", "--without-libnl3", cwd=build, env=env)
+    run("make", "-C", str(build / "lib"), "-j4", env=env)
+    for directory, name in (("dump", "dump.erofs"), ("fsck", "fsck.erofs"), ("mkfs", "mkfs.erofs")):
+        run("make", "-C", str(build / directory), "-j4", env=env)
+        shutil.copyfile(build / directory / name, out / name)
+        (out / name).chmod(0o755)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--host-only", action="store_true", help="Build the native file-test tool only")
+    parser.add_argument("--host-only", action="store_true", help="Build native test and pinned EROFS tools")
     args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     if args.host_only:
-        objects = ROOT / "build/host-objects"
-        objects.mkdir(exist_ok=True)
-        for name in ("lz4", "lz4hc"):
-            run(os.environ.get("CC", "cc"), "-O2", "-c", str(LZ4 / f"{name}.c"),
-                "-o", str(objects / f"{name}.o"))
-        run(os.environ.get("CXX", "c++"), "-std=c++17", "-O2", "-Wall", "-Wextra", "-Werror",
-            "-I" + str(LZ4), "-I" + str(THIRD),
-            str(ROOT / "src/adaptive.cpp"), str(objects / "lz4.o"), str(objects / "lz4hc.o"),
-            "-lz", "-o", str(ROOT / "build/audio-adaptive-host"))
+        build_host()
         return
     ndk_home = os.environ.get("ANDROID_NDK_HOME")
     if not ndk_home:

@@ -108,8 +108,8 @@ python3 tools/build_tools.py --host-only
 python3 -m unittest discover -s tests -v
 ```
 
-Host tests require `mkfs.erofs`, `dump.erofs`, `fsck.erofs`, zlib development
-headers and a C/C++ toolchain. They use synthetic XML and temporary regular
+Host tests build pinned EROFS tools and require autotools, pkg-config, zlib
+development headers and a C/C++ toolchain. They use synthetic XML and temporary regular
 files, never block devices. CI does not contain or flash firmware.
 
 When reporting a problem, include model, ROM version, operation, exact error

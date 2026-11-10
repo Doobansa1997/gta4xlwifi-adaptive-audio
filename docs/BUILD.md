@@ -49,6 +49,8 @@ python3 -m unittest discover -s tests -v
 
 These tests build synthetic EROFS and boot fixtures, then check file-image
 apply/restore and failures without requiring or redistributing firmware.
+The host build also compiles pinned erofs-utils 1.9.4 into `build/host-bin`;
+scripts prefer those tools to older distribution versions lacking `--cat`.
 
 ## 3. Supply the official reference ROM locally
 
