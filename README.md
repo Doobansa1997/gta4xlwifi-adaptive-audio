@@ -1,7 +1,8 @@
 # gta4xlwifi Adaptive Audio
 
-Experimental, root-free recovery installer for **Samsung Galaxy Tab S6 Lite
-(2020) Wi-Fi, SM-P610 / gta4xlwifi**, running **LineageOS 23.2 / Android 16**.
+I built this experimental, root-free recovery installer for my **Samsung
+Galaxy Tab S6 Lite (2020) Wi-Fi, SM-P610 / gta4xlwifi**, running
+**LineageOS 23.2 / Android 16**.
 
 It reapplies a conservative speaker preset after compatible nightly updates
 without flashing an old vendor image. **Not for SM-P613, SM-P615, other Tab S6
@@ -11,15 +12,24 @@ Lite revisions, stock One UI, or other LineageOS versions.**
 [Install / restore / updates](docs/INSTALL.md) · [Testing](docs/TESTING.md) ·
 [Design and EQ values](docs/DESIGN.md)
 
-## Why
+## Why I made it
 
-On one SM-P610, the user found speaker output louder and more distorted than
-before installing LineageOS. A lower playback level and conservative EQ
-improved listening on that device. This is a subjective result, **not an
-acoustic calibration or a verified reproduction of Samsung processing**.
-The cause of the original distortion was not established.
+After installing LineageOS on my tablet, I noticed that the speakers were
+louder, but sounded worse and crackled at higher volumes. I wanted cleaner
+sound, not more volume, so I put together a conservative EQ and reduced
+the speaker playback level.
 
-The preset:
+It sounds better to me on my tablet. I haven't measured the acoustic response
+or established exactly what caused the distortion, so **this isn't a
+calibration or a recreation of Samsung's stock audio processing**.
+
+I also wanted to reapply the preset after a nightly update without flashing
+an entire vendor image from an older build. That's why I made the installer
+adaptive rather than tying it to one nightly.
+
+## What I changed
+
+My preset:
 
 - Subtracts **600 millibels (6 dB)** from speaker volume-curve points:
   **media, alarms, notifications, calls, and other configured speaker groups**.
@@ -34,7 +44,7 @@ Android-added `AUDIO_STREAM_REROUTING`, `AUDIO_STREAM_PATCH` and
 a universal acoustic output ceiling: downstream DSP may compensate it,
 and software cannot repair damaged speakers.
 
-## What makes it adaptive?
+## How it works
 
 The installer reads the **currently installed vendor**, checks the three
 audio XML files against recognized original/patched templates, discovers
@@ -47,7 +57,7 @@ SHA256 identities. Reflashing an already applied preset is a no-op, not
 another 6 dB reduction.
 
 **The same locally built ZIP can be reused after a compatible 23.2 nightly.**
-“Compatible” does not mean every nightly: changed XML, compression layout,
+By “compatible,” I don't mean every nightly: changed XML, compression layout,
 Android version or vendor verification causes refusal. It does not silently
 accept new manufacturer tuning or overwrite newer vendor components.
 
@@ -63,23 +73,25 @@ mount arrangement without vendor AVB flags; that check is not proof of
 every possible future boot-chain behavior. Never relock the bootloader
 with this custom ROM installed.
 
-Testing so far:
+Here's what I've tested so far:
 
-- One device, LineageOS `23.2-20261107-NIGHTLY-gta4xlwifi`.
-- Earlier full-image prototype: actual writes, boot and listening confirmed.
+- My SM-P610, running LineageOS `23.2-20261107-NIGHTLY-gta4xlwifi`.
+- An earlier full-image prototype: I installed it, checked that Android
+  booted, and listened to the result.
 - Adaptive tool: host and ARM64 **file-image** apply, idempotency and restore.
 - Adaptive ZIP: real recovery preflight and apply with the preset **already
   present**, followed by successful boot and unchanged XML hashes/curves.
-- Not yet tested: adaptive raw-device writes from an untouched ROM, adaptive
-  restore on a real partition, or a real subsequent nightly update.
+- I haven't yet tested adaptive raw-device writes from an untouched ROM,
+  adaptive restore on a real partition, or a real subsequent nightly update.
 
-See [the test matrix](docs/TESTING.md). Do not treat successful sideload
+I've documented the details in [the test matrix](docs/TESTING.md).
+Do not treat successful sideload
 transfer alone as successful installation.
 
 ## Obtain the installer
 
-This repository is **source-only**. It does not publish firmware, vendor
-images, proprietary Dolby XML templates, or flashable ZIPs containing them.
+I'm publishing this as a **source-only** project. I've left out firmware,
+vendor images, proprietary Dolby XML templates, and flashable ZIPs containing them.
 Build locally using your own official reference ROM:
 
 1. Follow [BUILD.md](docs/BUILD.md).
@@ -112,7 +124,7 @@ Host tests build pinned EROFS tools and require autotools, pkg-config, zlib
 development headers and a C/C++ toolchain. They use synthetic XML and temporary regular
 files, never block devices. CI does not contain or flash firmware.
 
-When reporting a problem, include model, ROM version, operation, exact error
+If you run into a problem, please include your model, ROM version, operation, exact error
 and a **redacted** relevant log excerpt. Remove serial numbers, account names,
 file paths and other private details. Do not upload whole firmware, user
 data or unredacted logs. Stop at a compatibility refusal; do not remove
@@ -120,8 +132,8 @@ guards or try this on another model.
 
 ## License and attribution
 
-Project-authored code: [MIT](LICENSE). Third-party components retain their
+I've released the project code under [MIT](LICENSE). Third-party components retain their
 licenses; see [THIRD_PARTY.md](THIRD_PARTY.md).
 
-Independent community experiment; not affiliated with Samsung, Dolby or
-LineageOS. Those names identify existing hardware/software, not endorsement.
+This is my own community experiment. I'm not affiliated with Samsung, Dolby
+or LineageOS; mentioning them doesn't imply their endorsement.
