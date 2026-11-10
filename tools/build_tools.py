@@ -60,7 +60,7 @@ def build_host():
         shutil.copyfile(build / directory / name, out / name)
         (out / name).chmod(0o755)
     run(os.environ.get("CXX", "c++"), "-std=gnu++17", "-O2", "-Wall", "-Wextra", "-Werror",
-        "-I" + str(build), "-isystem", str(EROFS / "include"), "-I" + str(THIRD),
+        "-DHAVE_CONFIG_H", "-I" + str(build), "-isystem", str(EROFS / "include"), "-I" + str(THIRD),
         str(ROOT / "tools/erofs_manifest.cpp"), str(build / "lib/.libs/liberofs.a"),
         str(objects / "liblz4.a"), "-o", str(out / "erofs-manifest"))
 

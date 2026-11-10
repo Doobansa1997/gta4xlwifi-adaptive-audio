@@ -107,6 +107,8 @@ All 117 source files match the originally reviewed archive. Duplicate entries,
 links and escaping paths are refused. Only transport timestamps/compression and
 ownership fields are ignored; changed file contents, paths or modes still fail.
 Other dependencies retain exact downloaded-byte SHA256 verification.
+The host EROFS manifest helper uses the library's generated `config.h`, keeping
+its platform type definitions consistent on both Linux and macOS.
 
 If GitHub regenerates a source archive with different bytes, the build will
 stop. Review the upstream commit/archive before updating its checksum;
