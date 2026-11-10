@@ -304,26 +304,38 @@ void check_boot(const fs::path& path) {
     std::cout << "BOOT CHECK OK: logical vendor without AVB flags in boot ramdisk\n";
 }
 
-std::vector<Change> prepare(int fd, uint64_t size, const fs::path& image, const fs::path& root) {
+std::vector<Change> prepare(int fd, uint64_t size, const fs::path& image, const fs::path& root,
+                            bool reset = false) {
     Bytes superblock = read_at(fd, 1024, 128);
     require(little32(superblock, 0) == 0xe0f5e1e2, "Vendor is not EROFS");
     require(superblock[12] == 12, "Only 4 KiB EROFS blocks are supported");
     require((little32(superblock, 80) & ~1U) == 0, "Unsupported EROFS incompatible features");
     capture({(root / "bin/fsck.erofs").string(), "--extract", image.string()});
     std::vector<Change> result;
-    int originals = 0, patched = 0;
+    const std::array<std::string, 8> states = {
+        "original", "patched", "previous", "previous9", "previous11",
+        "previous_treble", "previous_bass", "baseline",
+    };
+    std::array<int, 8> matches {};
     for (size_t index = 0; index < paths.size(); ++index) {
-        Bytes original = load(root / "templates" / (std::to_string(index) + ".original"));
-        Bytes replacement = load(root / "templates" / (std::to_string(index) + ".patched"));
-        require(original.size() == replacement.size(), "Template decoded lengths differ");
+        std::array<Bytes, 8> templates;
+        for (size_t state = 0; state < states.size(); ++state) {
+            templates[state] = load(root / "templates" / (std::to_string(index) + "." + states[state]));
+            require(templates[state].size() == templates[0].size(), "Template decoded lengths differ");
+        }
+        const Bytes& desired = templates[reset ? 0 : 1];
         std::string content = capture({(root / "bin/dump.erofs").string(), "--cat",
                                        "--path=" + paths[index], image.string()});
         Bytes actual(content.begin(), content.end());
-        bool is_original = actual == original, is_patched = actual == replacement;
-        require(is_original || is_patched, "Unrecognized audio configuration: " + paths[index] +
+        bool recognized = false;
+        for (size_t state = 0; state < states.size(); ++state) {
+            if (actual == templates[state]) {
+                ++matches[state];
+                recognized = true;
+            }
+        }
+        require(recognized, "Unrecognized audio configuration: " + paths[index] +
                 ". New tuning requires review; no partition writes");
-        originals += is_original;
-        patched += is_patched;
         std::string layout = capture({(root / "bin/dump.erofs").string(), "-e",
                                       "--path=" + paths[index], image.string()});
         std::regex extent(R"(\s0:\s+0\.\.\s+([0-9]+)\s+\|\s+([0-9]+)\s+:\s+([0-9]+)\.\.\s+([0-9]+)\s+\|\s+([0-9]+))");
@@ -339,12 +351,19 @@ std::vector<Change> prepare(int fd, uint64_t size, const fs::path& image, const 
         for (const auto& previous : result) require(previous.offset != offset, "Overlapping audio clusters");
         Bytes cluster = read_at(fd, offset, BLOCK);
         require(decode(cluster, actual.size()) == actual, "Extent is not an independent LZ4 cluster");
-        result.push_back({offset, cluster, is_patched ? cluster : encode(replacement)});
+        result.push_back({offset, cluster, actual == desired ? cluster : encode(desired)});
     }
-    require(originals == 3 || patched == 3, "Mixed/partial audio preset detected; restore first");
-    if (patched == 3) {
+    require(std::any_of(matches.begin(), matches.end(), [](int count) { return count == 3; }),
+            "Mixed/partial audio preset detected; restore first");
+    if (matches[reset ? 0 : 1] == 3) {
         std::cout << "ALREADY APPLIED: recognized preset; attenuation will not be stacked\n";
         return {};
+    }
+    for (size_t state = 2; state < states.size(); ++state) {
+        if (matches[state] == 3) {
+            std::cout << "MIGRATION: recognized preset " << states[state] << "\n";
+            break;
+        }
     }
     {
         FD output(open(image.c_str(), O_RDWR | O_CLOEXEC | O_NOFOLLOW));
@@ -355,7 +374,8 @@ std::vector<Change> prepare(int fd, uint64_t size, const fs::path& image, const 
     for (size_t index = 0; index < paths.size(); ++index) {
         std::string content = capture({(root / "bin/dump.erofs").string(), "--cat",
                                       "--path=" + paths[index], image.string()});
-        require(Bytes(content.begin(), content.end()) == load(root / "templates" / (std::to_string(index) + ".patched")),
+        require(Bytes(content.begin(), content.end()) == load(root / "templates" /
+                    (std::to_string(index) + (reset ? ".original" : ".patched"))),
                 "Staged EROFS file verification failed");
     }
     return result;
@@ -487,8 +507,16 @@ void restore_image(int fd, uint64_t size, const fs::path& directory) {
     std::cout << "RESTORE VERIFIED: original vendor SHA256 " << backup.original_hash << "\n";
 }
 
+#include "soundbooster_blocks.h"
+
 int main(int argc, char** argv) {
     try {
+        if (argc == 8 && std::string(argv[1]).rfind("blocks-", 0) == 0) {
+            require(std::string(argv[7]) == "--confirmed-offline-or-recovery",
+                    "Explicit recovery/offline acknowledgement required");
+            soundbooster_blocks::run(argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "selftest") {
             Bytes abc {'a', 'b', 'c'};
             require(hash_bytes(abc) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
@@ -502,9 +530,10 @@ int main(int argc, char** argv) {
             check_boot(argv[2]);
             return 0;
         }
-        require(argc == 7, "Usage: audio-adaptive preflight|apply|restore --file|--device IMAGE BACKUPS TOOLS TMP");
+        require(argc == 7, "Usage: audio-adaptive preflight|apply|restore|replace|reset --file|--device IMAGE BACKUPS_OR_DASH TOOLS TMP");
         std::string mode = argv[1], kind = argv[2];
-        require(mode == "preflight" || mode == "apply" || mode == "restore", "Unknown operation");
+        require(mode == "preflight" || mode == "apply" || mode == "restore" ||
+                mode == "replace" || mode == "reset", "Unknown operation");
         require(kind == "--file" || kind == "--device", "Explicit target type required");
         bool regular = kind == "--file";
         bool write = mode != "preflight";
@@ -519,7 +548,7 @@ int main(int argc, char** argv) {
         TemporaryImage image(argv[6]);
         copy_image(target.value, size, image.path);
         std::string original_hash = image_hash(target.value, size);
-        std::vector<Change> changes = prepare(target.value, size, image.path, argv[5]);
+        std::vector<Change> changes = prepare(target.value, size, image.path, argv[5], mode == "reset");
         if (changes.empty()) return 0;
         FD staged(open(image.path.c_str(), O_RDONLY | O_CLOEXEC));
         std::string patched_hash = image_hash(staged.value, size);
@@ -530,7 +559,7 @@ int main(int argc, char** argv) {
             std::cout << "PREFLIGHT OK: compatible audio XML and dynamic offsets; no vendor writes\n";
             return 0;
         }
-        save_backup(argv[4], backup, regular);
+        if (mode == "apply") save_backup(argv[4], backup, regular);
         require(image_hash(target.value, size) == original_hash, "Vendor changed after backup; no partition writes");
         if (!regular) require_unmounted(target.value);
         apply_changes(target.value, backup, false);

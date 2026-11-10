@@ -1,67 +1,55 @@
 # Audio adattivo per SM-P610 / gta4xlwifi
 
-Progetto sperimentale per **Galaxy Tab S6 Lite Wi-Fi 2020 SM-P610** con
-**LineageOS 23.2 / Android 16**. Non compatibile con SM-P613, SM-P615,
-altre revisioni o One UI. Non e un progetto ufficiale Samsung/Dolby/LineageOS.
+Configurazione definitiva scelta sul tablet: **SoundBooster Samsung + Dolby
+originale, attenuazione delle curve speaker -7 dB**.
+Solo **Galaxy Tab S6 Lite Wi-Fi 2020 SM-P610**, **LineageOS 23.2 / Android 16**,
+sulla build di riferimento verificata. Non compatibile con SM-P613, SM-P615,
+One UI o altre build non esaminate.
 
-## Obiettivo
+La scelta finale resta **sperimentale**, non una garanzia contro distorsione o
+danni agli altoparlanti, ne una replica acustica misurata di One UI.
 
-Riapplicare lo stesso preset audio dopo una nightly compatibile, senza
-riflashare una vendor vecchia. Il preset riduce di **6 dB le curve speaker**
-(anche sveglie, notifiche e chiamate) e applica soli tagli all'optimizer
-Dolby. Cuffie e altri endpoint conservano le curve originali.
+## Verifiche
 
-Non e una replica misurata dell'audio Samsung, ne un limite universale
-anti-distorsione. I flussi interni rerouting/patch/call_assistant non sono
-coperti; elaborazioni successive possono compensare il livello.
+- Installazione in recovery con esito 0 e rilettura completa della vendor
+  corrispondente all'immagine -7 dB.
+- Android avviato e hash delle due policy -7 dB corretti.
+- SoundBooster operativo nella riproduzione reale: stato 0, stereo float
+  a 48 kHz, uscita speaker, frame 6772800 -> 6970560 e zero bypass.
+- Dolby originale mantenuto; motore e parametri SoundBooster invariati.
+- 77 test privati superati; senza firmware 71 superati e sei test opzionali saltati.
 
-## Utilizzo
+L'attenuazione riguarda anche **sveglie, notifiche e chiamate**. Le curve cuffie
+e Bluetooth non cambiano. Il DSP puo compensare il livello: iniziare sempre
+a volume basso e fermarsi al primo gracchiare.
 
-1. Leggere [compilazione](BUILD.md): gli ZIP si generano localmente dalla
-   ROM ufficiale di riferimento, verificata con SHA256.
-2. Conservare backup dati, ROM completa e tutti e tre gli ZIP.
-3. In recovery eseguire preflight, poi install, accettando soltanto
-   il proprio ZIP verificato quando chiede conferma della firma.
-4. Richiedere i messaggi `ADAPTIVE PREFLIGHT OK` e `ADAPTIVE APPLY OK`.
-   Il solo trasferimento ADB non dimostra l'esito.
-5. Ascoltare a volume basso, aumentando gradualmente. Non sommare Wavelet
-   o altri EQ al test. Interrompere al primo gracchiare.
+## File e installazione
 
-[Istruzioni complete: installazione, ripristino, OTA ed errori](INSTALL.md).
+La distribuzione locale conservata e `dist/soundbooster-final/`: preflight,
+install, restore, `SHA256SUMS` e `manifest.json`.
+Il repository GitHub contiene **solo sorgenti e documentazione**, non librerie
+Samsung, parametri proprietari, immagini, log personali o ZIP flashabili.
 
-## Dopo un aggiornamento
+Seguire [compilazione finale](BUILD.md#final-selected-build--7-db) e
+[installazione finale](INSTALL.md#final-selected-version--7-db).
+In recovery usare **Apply update -> Apply from ADB**; prima del riavvio
+abilitare **Advanced -> Enable ADB** per controllare log e hash vendor.
+Il solo trasferimento ADB completato non dimostra l'installazione.
 
-Se una nuova nightly 23.2 compatibile sovrascrive vendor, basta riflashare
-**lo stesso installer adattivo**. Il tool legge la nuova vendor e non
-ripristina componenti vecchi. Se il formato o gli XML non corrispondono,
-si ferma. Riflashare quando e gia applicato non somma altri -6 dB.
+**Restore riporta tutta la vendor alla ROM originale**, rimuovendo SoundBooster
+e attenuazione, non torna a -9/-11 dB. Nessun backup viene creato sul tablet.
+Conservare il restore corrispondente e una procedura ufficiale di recupero ROM.
 
-Per un OTA incrementale puo essere ancora necessario ripristinare prima
-vendor originale: l'installer adattivo non risolve i requisiti del delta.
+## OTA e limiti
 
-Il backup dei tre blocchi modificati e in
-`/cache/lineage-audio-adaptive/`, vincolato all'identita della vendor.
-**Non cancellare cache prima del ripristino.** Se il preset era gia presente
-dal vecchio ZIP, non viene inventato un backup: conservare il vecchio restore
-per quella build. Dopo una nuova vendor integra verra creato il backup adattivo.
+Questa versione ricostruisce la vendor per immagini esatte: **non riutilizzare
+gli ZIP dopo una OTA**, neppure un'altra nightly 23.2. Non e il precedente
+installer XML adattivo. I vecchi sorgenti restano per test e riproducibilita,
+non come configurazione consigliata.
 
-## Stato reale delle prove
+Non disabilitare AVB/SELinux, non ribloccare il bootloader e non aggirare i
+controlli di compatibilita. Blocchi sconosciuti o scritture interrotte possono
+richiedere il recupero ufficiale della ROM; non formattare dati alla cieca.
 
-Un tablet: il preset precedente e stato scritto e ascoltato con esito
-positivo. Il nuovo tool e stato provato su immagini file host e ARM64,
-con ripristino esatto. I nuovi ZIP sono stati eseguiti nella recovery reale
-quando il preset era gia presente, senza doppia attenuazione e con avvio
-riuscito. **Non ancora provati scrittura/ripristino adattivi su partizione
-originale o un aggiornamento reale a una nightly successiva.**
-
-Vedere [matrice delle prove](TESTING.md). Non si modificano root, boot,
-vbmeta, EFS o metadati super. Le verifiche non vanno rimosse per forzare
-l'installazione.
-
-## Pubblicazione e licenze
-
-Codice del progetto MIT; componenti terzi con proprie licenze.
-Non pubblichiamo firmware, log personali, immagini vendor o tuning
-proprietario Dolby. Per questo la release e di **soli sorgenti**, con una
-procedura per generare localmente gli ZIP. I file generati non diventano
-automaticamente MIT. Vedere [attribuzioni](../THIRD_PARTY.md).
+[README completo](../README.md) · [Test](TESTING.md) · [Design](DESIGN.md) ·
+[Licenze e componenti](../THIRD_PARTY.md)

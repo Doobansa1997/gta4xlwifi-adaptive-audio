@@ -11,6 +11,9 @@ not every byte of a locally generated recovery ZIP.
 | Android NDK | Tested with 28.2.13676358 | Multiple licenses; installed NDK `NOTICE` / `NOTICE.toolchain` copied into local output |
 | Lineage legacy updater | Executable extracted locally from the reference official full OTA | [Source](https://github.com/LineageOS/android_bootable_deprecated-ota/tree/lineage-23.2); executable/dependencies retain their licenses, not relicensed MIT |
 | Vendor XML / boot / vendor image | Extracted locally from user-supplied reference ROM | Firmware/configuration rights remain with their respective owners; not hosted here |
+| Samsung SoundBooster engine / parameters | Hash-checked local SM-P610 firmware inputs | Proprietary firmware; not hosted or redistributed |
+| Android Reed-Solomon codec | `90857deb7973c0ca24c79b9c1809fc9667f32c4f` | LGPL-2.1-or-later; [upstream](https://android.googlesource.com/platform/external/fec/), upstream source/notices retained locally |
+| avbtool | LineageOS `91f1bfc948d35265c3b1e5e97bf1c410e65d18fa` | MIT; [upstream](https://github.com/LineageOS/android_external_avb), retained local script notice |
 
 Pinned source archives/headers are downloaded only during a build into
 ignored `third-party/`. Local packages include dependency source archives,

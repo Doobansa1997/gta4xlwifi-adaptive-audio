@@ -9,6 +9,14 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 THIRD = ROOT / "third-party"
 SOURCES = {
+    "avbtool.py": (
+        "https://raw.githubusercontent.com/LineageOS/android_external_avb/91f1bfc948d35265c3b1e5e97bf1c410e65d18fa/avbtool.py",
+        "fc5332131a907ae22978e16a84fa12a14d277a60d8e2ad77c31a0097dafeb657",
+    ),
+    "fec.tar.gz": (
+        "https://android.googlesource.com/platform/external/fec/+archive/90857deb7973c0ca24c79b9c1809fc9667f32c4f.tar.gz",
+        "0e76686d4921b1da9cbfcbcf94c68ff94afd3bfcc39eab3b542a5ffc0d76cd95",
+    ),
     "erofs.tar.gz": (
         "https://api.github.com/repos/erofs/erofs-utils/tarball/f36cadb5c563995ab3aa8572a60ed6b721b9557d",
         "2e105d4b0798d76b713ba2d315992c82980c842acb228b42fcec4ffe28710a97",
@@ -38,10 +46,14 @@ def main():
         if hashlib.sha256(target.read_bytes()).hexdigest() != checksum:
             raise ValueError(f"Source checksum mismatch: {name}; remove only that file and retry")
         if name.endswith(".tar.gz"):
-            directory = "erofs-erofs-utils-f36cadb" if name.startswith("erofs") else "lz4-lz4-ebb370c"
+            directory = {
+                "erofs.tar.gz": "erofs-erofs-utils-f36cadb",
+                "lz4.tar.gz": "lz4-lz4-ebb370c",
+                "fec.tar.gz": "fec-90857de",
+            }[name]
             if not (THIRD / directory).exists():
                 with tarfile.open(target) as archive:
-                    archive.extractall(THIRD, filter="data")
+                    archive.extractall(THIRD / directory if name == "fec.tar.gz" else THIRD, filter="data")
         print(f"Verified {name}")
 
 

@@ -6,6 +6,7 @@ import struct
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,7 +67,19 @@ class AdaptiveTests(unittest.TestCase):
         for index, original in enumerate(originals):
             patched = (preset.equalize_speakers(original) if index == 2 else
                        preset.attenuate_speakers(original, defaults))
-            for kind, data in (("original", original), ("patched", patched)):
+            previous = (preset.equalize_speakers(original, preset.PREVIOUS_EQ_Q4) if index == 2 else
+                        preset.attenuate_speakers(original, defaults, 600))
+            previous9 = (preset.equalize_speakers(original, preset.PREVIOUS9_EQ_Q4) if index == 2 else
+                         preset.attenuate_speakers(original, defaults, 900))
+            previous11 = (preset.equalize_speakers(original, preset.PREVIOUS11_EQ_Q4) if index == 2 else
+                          preset.attenuate_speakers(original, defaults, 1100))
+            previous_treble = (preset.equalize_speakers(original, preset.PREVIOUS_TREBLE_EQ_Q4)
+                               if index == 2 else previous11)
+            for kind, data in (("original", original), ("patched", patched),
+                               ("previous", previous), ("previous9", previous9),
+                               ("previous11", previous11), ("previous_treble", previous_treble),
+                               ("previous_bass", patched),
+                               ("baseline", original if index == 2 else patched)):
                 (cls.tools / "templates" / f"{index}.{kind}").write_bytes(data)
         tree = cls.root / "tree"
         for index, name in enumerate((
@@ -101,10 +114,10 @@ class AdaptiveTests(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def run_tool(self, mode, success=True, image=None, backups=None):
+    def run_tool(self, mode, success=True, image=None, backups=None, tools=None):
         result = subprocess.run([
             str(TOOL), mode, "--file", str(image or self.image),
-            str(backups or self.backups), str(self.tools), str(self.directory),
+            str(backups or self.backups), str(tools or self.tools), str(self.directory),
         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if success:
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -151,6 +164,145 @@ class AdaptiveTests(unittest.TestCase):
         self.run_tool("restore")
         self.assertEqual(sha256(self.image), before)
         self.assertNotEqual(before, sha256(self.relocated))
+
+    def test_previous_preset_migration_and_exact_restore(self):
+        self.check_previous_migration("previous")
+
+    def test_previous9_preset_migration_and_exact_restore(self):
+        self.check_previous_migration("previous9", backup_free=True)
+
+    def test_previous11_treble_revision_and_reset(self):
+        self.check_previous_migration("previous11", backup_free=True)
+
+    def test_previous_treble_bass_revision_and_reset(self):
+        self.check_previous_migration("previous_treble", backup_free=True)
+
+    def check_previous_migration(self, suffix, backup_free=False):
+        tree = self.directory / "previous-tree"
+        shutil.copytree(self.root / "tree", tree)
+        for index, name in enumerate(preset.FILES):
+            (tree / name).write_bytes((self.tools / "templates" / f"{index}.{suffix}").read_bytes())
+        subprocess.run(["mkfs.erofs", "-b4096", "-z", "lz4hc,level=12", "-C4096",
+                        "--max-extent-bytes=131072", str(self.image), str(tree)],
+                       check=True, stdout=subprocess.DEVNULL)
+        before = sha256(self.image)
+        self.assertIn("MIGRATION", self.run_tool("preflight"))
+        self.assertEqual(sha256(self.image), before)
+        self.assertFalse(self.backups.exists())
+        operation = "replace" if backup_free else "apply"
+        self.assertIn("MIGRATION", self.run_tool(operation))
+        for index, name in enumerate(preset.FILES):
+            content = subprocess.check_output([
+                "dump.erofs", "--cat", f"--path=/{name}", str(self.image)
+            ])
+            self.assertEqual(content, (self.tools / "templates" / f"{index}.patched").read_bytes())
+        after = sha256(self.image)
+        self.assertIn("ALREADY APPLIED", self.run_tool(operation))
+        self.assertEqual(sha256(self.image), after)
+        if backup_free:
+            self.assertFalse(self.backups.exists())
+            self.run_tool("reset")
+            for index, name in enumerate(preset.FILES):
+                content = subprocess.check_output([
+                    "dump.erofs", "--cat", f"--path=/{name}", str(self.image)
+                ])
+                self.assertEqual(content, (self.tools / "templates" / f"{index}.original").read_bytes())
+        else:
+            self.run_tool("restore")
+            self.assertEqual(sha256(self.image), before)
+
+    def test_mixed_previous_and_original_refused(self):
+        tree = self.directory / "mixed-tree"
+        shutil.copytree(self.root / "tree", tree)
+        (tree / preset.FILES[0]).write_bytes((self.tools / "templates/0.previous").read_bytes())
+        subprocess.run(["mkfs.erofs", "-b4096", "-z", "lz4hc,level=12", "-C4096",
+                        "--max-extent-bytes=131072", str(self.image), str(tree)],
+                       check=True, stdout=subprocess.DEVNULL)
+        before = sha256(self.image)
+        self.assertIn("Mixed/partial", self.run_tool("apply", success=False))
+        self.assertEqual(sha256(self.image), before)
+        self.assertFalse(self.backups.exists())
+
+    def test_backup_free_replace_and_reset(self):
+        before = sha256(self.image)
+        self.run_tool("replace")
+        self.assertFalse(self.backups.exists())
+        self.assertIn("ALREADY APPLIED", self.run_tool("replace"))
+        self.run_tool("reset")
+        self.assertFalse(self.backups.exists())
+        for index, name in enumerate(preset.FILES):
+            content = subprocess.check_output([
+                "dump.erofs", "--cat", f"--path=/{name}", str(self.image)
+            ])
+            self.assertEqual(content, (self.tools / "templates" / f"{index}.original").read_bytes())
+        self.assertIn("ALREADY APPLIED", self.run_tool("reset"))
+        self.assertEqual(sha256(self.image), before)
+
+    def test_samsung_baseline_from_custom_and_back(self):
+        baseline_tools = self.directory / "baseline-tools"
+        shutil.copytree(self.tools, baseline_tools, symlinks=True)
+        for index in range(len(preset.FILES)):
+            shutil.copyfile(baseline_tools / "templates" / f"{index}.baseline",
+                            baseline_tools / "templates" / f"{index}.patched")
+        for starting_state in ("original", "custom"):
+            with self.subTest(starting_state=starting_state):
+                shutil.copyfile(self.relocated, self.image)
+                if starting_state == "custom":
+                    self.run_tool("replace")
+                before = sha256(self.image)
+                self.run_tool("preflight", tools=baseline_tools)
+                self.assertEqual(sha256(self.image), before)
+                self.run_tool("replace", tools=baseline_tools)
+                for index, name in enumerate(preset.FILES):
+                    content = subprocess.check_output([
+                        "dump.erofs", "--cat", f"--path=/{name}", str(self.image)
+                    ])
+                    suffix = "original" if index == 2 else "patched"
+                    self.assertEqual(content, (self.tools / "templates" / f"{index}.{suffix}").read_bytes())
+                installed = sha256(self.image)
+                self.assertIn("ALREADY APPLIED", self.run_tool("replace", tools=baseline_tools))
+                self.assertEqual(sha256(self.image), installed)
+                self.assertIn("MIGRATION", self.run_tool("replace"))
+                self.run_tool("replace", tools=baseline_tools)
+                self.run_tool("reset", tools=baseline_tools)
+                for index, name in enumerate(preset.FILES):
+                    content = subprocess.check_output([
+                        "dump.erofs", "--cat", f"--path=/{name}", str(self.image)
+                    ])
+                    self.assertEqual(content, (self.tools / "templates" / f"{index}.original").read_bytes())
+                self.assertFalse(self.backups.exists())
+
+    def test_samsung_packaging_exact_identity_and_unknown_input(self):
+        vendor = self.directory / "samsung-vendor"
+        shutil.copytree(self.root / "tree", vendor)
+        defaults = b'<volumes><reference name="media"><point>1,-5800</point><point>100,0</point></reference></volumes>'
+        for name in ("default_volume_tables.xml", "audio_policy_engine_default_stream_volumes.xml"):
+            (vendor / "etc" / name).write_bytes(defaults)
+        hashes = {
+            key: tuple(sha256(self.tools / "templates" / f"{index}.{suffix}")
+                       for index in range(len(preset.FILES)))
+            for key, suffix in (
+                ("ORIGINAL_HASHES", "original"), ("PREVIOUS_HASHES", "previous"),
+                ("PREVIOUS9_HASHES", "previous9"), ("PREVIOUS11_HASHES", "previous11"),
+                ("PREVIOUS_TREBLE_HASHES", "previous_treble"), ("PREVIOUS_BASS_HASHES", "patched"),
+            )
+        }
+        with mock.patch.multiple(preset, VENDOR_TREE=vendor, **hashes):
+            payload = package.verified_samsung_dolby(vendor)
+            stage = self.directory / "baseline-stage"
+            manifest = package.templates(stage, payload)
+            self.assertEqual((stage / "templates/2.patched").read_bytes(), payload)
+            self.assertEqual(manifest[2]["patched_sha256"], hashes["ORIGINAL_HASHES"][2])
+            for index in (0, 1):
+                self.assertEqual((stage / "templates" / f"{index}.patched").read_bytes(),
+                                 (self.tools / "templates" / f"{index}.patched").read_bytes())
+            wrong = vendor / preset.FILES[2]
+            wrong.write_bytes(payload.replace(b'gain_left="0"', b'gain_left="1"', 1))
+            with self.assertRaisesRegex(ValueError, "reviewed SM-P610"):
+                package.verified_samsung_dolby(vendor)
+            wrong.write_bytes(payload)
+            with self.assertRaisesRegex(ValueError, "differ"):
+                package.templates(self.directory / "wrong-stage", payload + b" ")
 
     def test_dynamic_offsets_on_rebuilt_erofs(self):
         before = sha256(self.relocated)
@@ -250,7 +402,8 @@ class AdaptiveTests(unittest.TestCase):
             self.assertNotIn("20261107", script)
             self.assertNotIn("update_dynamic_partitions", script)
             self.assertNotIn("block_image_update", script)
-            self.assertIn("/cache/lineage-audio-adaptive", script)
+            self.assertNotIn("/cache", script)
+            self.assertIn('"-"', script)
 
 
 if __name__ == "__main__":

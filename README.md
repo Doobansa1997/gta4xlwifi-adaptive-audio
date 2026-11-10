@@ -1,118 +1,95 @@
 # gta4xlwifi Adaptive Audio
 
-I built this experimental, root-free recovery installer for my **Samsung
-Galaxy Tab S6 Lite (2020) Wi-Fi, SM-P610 / gta4xlwifi**, running
-**LineageOS 23.2 / Android 16**.
+Final selected configuration: **Samsung SoundBooster + original Dolby tuning,
+with -7 dB speaker volume-policy attenuation** for the **Galaxy Tab S6 Lite
+(2020) Wi-Fi SM-P610 / gta4xlwifi**, **LineageOS 23.2 / Android 16**.
 
-It reapplies a conservative speaker preset after compatible nightly updates
-without flashing an old vendor image. **Not for SM-P613, SM-P615, other Tab S6
-Lite revisions, stock One UI, or other LineageOS versions.**
+[Italiano](docs/README.it.md) · [Build](docs/BUILD.md#final-selected-build--7-db) ·
+[Install / restore](docs/INSTALL.md#final-selected-version--7-db) ·
+[Testing](docs/TESTING.md) · [Design](docs/DESIGN.md)
 
-[Italiano](docs/README.it.md) · [Build](docs/BUILD.md) ·
-[Install / restore / updates](docs/INSTALL.md) · [Testing](docs/TESTING.md) ·
-[Design and EQ values](docs/DESIGN.md)
+I chose this version after testing -11, -9 and -7 dB on my tablet.
+It is the final choice for this device, **not a claim of universal safety or
+acoustic equivalence to Samsung One UI**. The project remains experimental.
+Not compatible with SM-P613, SM-P615, other revisions, One UI or other ROM builds.
 
-## Why I made it
+## What this version does
 
-After installing LineageOS on my tablet, I noticed that the speakers were
-louder, but sounded worse and crackled at higher volumes. I wanted cleaner
-sound, not more volume, so I put together a conservative EQ and reduced
-the speaker playback level.
+- Runs the original, locally supplied ARM32 Samsung SoundBooster engine through
+  a project-authored legacy Android effect bridge, on speaker music playback.
+- Uses the **original Dolby XML**, not the earlier custom bass/treble EQ.
+- Reduces covered speaker policy curves by **700 millibels (-7 dB)** relative
+  to the reference ROM. This includes **alarms, notifications and calls**, not
+  just music. Headphone/Bluetooth policy curves remain unchanged.
+- Keeps the reviewed engine parameters unchanged. Non-speaker/mixed routes
+  bypass the bridge; this behavior is native-tested, not tested on every real route.
+- Requires no root in Android, no startup service and no SELinux weakening.
 
-It sounds better to me on my tablet. I haven't measured the acoustic response
-or established exactly what caused the distortion, so **this isn't a
-calibration or a recreation of Samsung's stock audio processing**.
+The policy reduction is not a hard acoustic limiter: downstream DSP can change
+loudness. Start low and stop at the first audible distortion.
 
-I also wanted to reapply the preset after a nightly update without flashing
-an entire vendor image from an older build. That's why I made the installer
-adaptive rather than tying it to one nightly.
+## Verified status
 
-## What I changed
+- Device: SM-P610, LineageOS `23.2-20261107-NIGHTLY-gta4xlwifi`.
+- Final installation: recovery status **0**, followed by independent full vendor
+  read-back matching the reviewed -7 dB image.
+- Android boots; the two installed -7 dB policy hashes match the built image.
+- Live speaker playback: SoundBooster **status 0**, configured/enabled,
+  **stereo float, 48000 Hz**, speaker route `0x2`.
+- Two live snapshots: **6772800 -> 6970560 processed frames**, zero bypass.
+- Dolby and SoundBooster coexist in the running audio pipeline. No claim is
+  made about long-term stability, all routes, fault paths or measured distortion.
+- **77 private tests pass**; firmware-free runs pass 71 and skip six optional
+  private-input tests. Full-size install/idempotence/restore checks also pass.
 
-My preset:
+The bridge handles HIDL configuration mask `0x1e` and loads the original engine
+and existing vendor C++ runtime as explicit local-group dependencies, fixing
+the configuration and runtime-loading failures found during device testing.
 
-- Subtracts **600 millibels (6 dB)** from speaker volume-curve points:
-  **media, alarms, notifications, calls, and other configured speaker groups**.
-  Your alarms will be quieter.
-- Applies only cuts to the existing 20-band Dolby speaker optimizer.
-- Leaves headphone/Bluetooth curves, amp gains, calibration, existing
-  regulators and other Dolby parameters unchanged.
-- Adds no new DSP, root, startup service or OTA-persistence script.
+## Important difference from the earlier installer
 
-Android-added `AUDIO_STREAM_REROUTING`, `AUDIO_STREAM_PATCH` and
-`call_assistant` groups are **not covered**. A policy gain reduction is not
-a universal acoustic output ceiling: downstream DSP may compensate it,
-and software cannot repair damaged speakers.
+This final version is **not the old XML-only adaptive installer**. It rebuilds
+vendor contents and its AVB hashtree/FEC for exact reviewed images, preserving
+partition size, unrelated file contents/metadata and existing AVB policy.
+It does not flash boot/vbmeta/EFS/recovery or disable verification.
 
-## How it works
+**Do not reuse after an OTA**, even another LineageOS 23.2 nightly. The installer
+accepts only exact pinned reference, previous -9 dB or final -7 dB images.
+Unknown/torn blocks or unrelated changes are refused. Never remove these guards.
+The historical XML-only workflow remains in the source for regression and
+reproducibility; its OTA assumptions do not apply to the final SoundBooster build.
 
-The installer reads the **currently installed vendor**, checks the three
-audio XML files against recognized original/patched templates, discovers
-their EROFS offsets and stages changes before writing anything to vendor.
+## Local packages and installation
 
-It changes only three 4 KiB compressed data clusters. Existing metadata,
-permissions, SELinux labels, links, partition size and unrelated content are
-preserved. A small persistent backup binds those blocks to whole-image
-SHA256 identities. Reflashing an already applied preset is a no-op, not
-another 6 dB reduction.
+This is a **source-only repository**. Samsung libraries, parameter payloads,
+firmware, vendor images, device logs and generated ZIPs are **not published**.
+Supply your own reviewed firmware inputs and follow the
+[final build instructions](docs/BUILD.md#final-selected-build--7-db).
 
-**The same locally built ZIP can be reused after a compatible 23.2 nightly.**
-By “compatible,” I don't mean every nightly: changed XML, compression layout,
-Android version or vendor verification causes refusal. It does not silently
-accept new manufacturer tuning or overwrite newer vendor components.
+The retained local distribution is `dist/soundbooster-final/`:
 
-## Safety and current status
+| File | Operation |
+|---|---|
+| `audio-soundbooster-preflight-gta4xlwifi-los23.2.zip` | Checks without vendor writes |
+| `audio-soundbooster-install-gta4xlwifi-los23.2.zip` | Installs the final -7 dB image |
+| `audio-soundbooster-restore-gta4xlwifi-los23.2.zip` | Returns the **entire vendor to the reference ROM** |
+| `SHA256SUMS`, `manifest.json` | Local package identities and build scope |
 
-**Experimental. Raw partition writes can prevent booting. Back up your data
-and know how to reach recovery before using this. No warranty.**
+**Restore removes SoundBooster and -7 dB attenuation; it does not return to
+-9/-11 dB.** No device backup is created. Keep the matching restore and your
+official full ROM recovery path available. Known whole-block mixtures can be
+restored, but torn/unknown blocks are refused; power-loss recovery is not guaranteed.
 
-No boot/vbmeta/EFS/recovery writes, partition resizing or AVB disabling are
-performed. The original vendor hashtree remains unchanged and no longer
-matches modified data. The installer only supports the tested first-stage
-mount arrangement without vendor AVB flags; that check is not proof of
-every possible future boot-chain behavior. Never relock the bootloader
-with this custom ROM installed.
-
-Here's what I've tested so far:
-
-- My SM-P610, running LineageOS `23.2-20261107-NIGHTLY-gta4xlwifi`.
-- An earlier full-image prototype: I installed it, checked that Android
-  booted, and listened to the result.
-- Adaptive tool: host and ARM64 **file-image** apply, idempotency and restore.
-- Adaptive ZIP: real recovery preflight and apply with the preset **already
-  present**, followed by successful boot and unchanged XML hashes/curves.
-- I haven't yet tested adaptive raw-device writes from an untouched ROM,
-  adaptive restore on a real partition, or a real subsequent nightly update.
-
-I've documented the details in [the test matrix](docs/TESTING.md).
-Do not treat successful sideload
-transfer alone as successful installation.
-
-## Obtain the installer
-
-I'm publishing this as a **source-only** project. I've left out firmware,
-vendor images, proprietary Dolby XML templates, and flashable ZIPs containing them.
-Build locally using your own official reference ROM:
-
-1. Follow [BUILD.md](docs/BUILD.md).
-2. Verify the generated `dist/SHA256SUMS`.
-3. Use **preflight**, then **install**, from Lineage Recovery.
-4. Keep **restore** and its cache backup; read [INSTALL.md](docs/INSTALL.md)
-   before flashing.
-
-The local build creates three small ZIPs, not a full vendor image. Building
-uses the original, publicly hashed **20261107** reference OTA to derive
-recognized templates. Those templates may match later nightlies; the
-installed nightly itself need not have that date.
-
-Before incremental OTAs you may still need to restore unmodified vendor.
-An adaptive reinstallation does **not** make an OTA delta valid against
-modified source partitions. Do not wipe cache before restoring.
+In recovery, choose **Apply update -> Apply from ADB**, sideload preflight then
+install, re-entering sideload between them. Accept only your own hash-verified
+local ZIP when prompted about its missing official signature. Require
+`SOUNDBOOSTER APPLY VERIFIED` and recovery status 0, not just transfer completion.
+Enable **Advanced -> Enable ADB** before reboot to inspect the log and full vendor
+hash. See the [complete procedure](docs/INSTALL.md#final-selected-version--7-db).
 
 ## Development
 
-Python 3.11+, C++17, pinned public dependencies and an installed Android NDK.
-No Python packages are required. See [BUILD.md](docs/BUILD.md).
+Python 3.11+, C++17, pinned public dependencies and Android NDK 28.2.
 
 ```sh
 python3 tools/fetch_sources.py
@@ -120,20 +97,16 @@ python3 tools/build_tools.py --host-only
 python3 -m unittest discover -s tests -v
 ```
 
-Host tests build pinned EROFS tools and require autotools, pkg-config, zlib
-development headers and a C/C++ toolchain. They use synthetic XML and temporary regular
-files, never block devices. CI does not contain or flash firmware.
+Public tests use synthetic files, never block devices or firmware. Optional
+private emulation tests need Unicorn and locally supplied Samsung inputs;
+see [build requirements](docs/BUILD.md). CI does not contain or flash firmware.
+Keep local build inputs/evidence outside version control.
 
-If you run into a problem, please include your model, ROM version, operation, exact error
-and a **redacted** relevant log excerpt. Remove serial numbers, account names,
-file paths and other private details. Do not upload whole firmware, user
-data or unredacted logs. Stop at a compatibility refusal; do not remove
-guards or try this on another model.
+For bug reports, provide model, ROM version, operation, exact error and a
+**redacted** log excerpt. Do not upload firmware, personal data or full logs.
 
 ## License and attribution
 
-I've released the project code under [MIT](LICENSE). Third-party components retain their
-licenses; see [THIRD_PARTY.md](THIRD_PARTY.md).
-
-This is my own community experiment. I'm not affiliated with Samsung, Dolby
-or LineageOS; mentioning them doesn't imply their endorsement.
+Project-authored code is [MIT](LICENSE); dependency and firmware rights remain
+with their owners. See [THIRD_PARTY.md](THIRD_PARTY.md).
+This community experiment is not affiliated with Samsung, Dolby or LineageOS.

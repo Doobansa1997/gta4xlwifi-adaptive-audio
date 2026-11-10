@@ -35,6 +35,13 @@ def build_host():
     build.mkdir(exist_ok=True)
     out = ROOT / "build/host-bin"
     out.mkdir(exist_ok=True)
+    fec = THIRD / "fec-90857de"
+    for name in ("init_rs_char", "encode_rs_char"):
+        run(os.environ.get("CC", "cc"), "-O2", "-c", str(fec / (name + ".c")),
+            "-I" + str(fec), "-o", str(objects / (name + ".o")))
+    run(os.environ.get("CXX", "c++"), "-std=c++17", "-O2", "-Wall", "-Wextra", "-Werror",
+        "-I" + str(THIRD), "-I" + str(fec), str(ROOT / "tools/fec_encode.cpp"),
+        str(objects / "init_rs_char.o"), str(objects / "encode_rs_char.o"), "-o", str(out / "fec"))
     env = os.environ.copy()
     env.update({
         "CFLAGS": "-O2", "LDFLAGS": f"-L{objects}",
@@ -52,6 +59,10 @@ def build_host():
         run("make", "-C", str(build / directory), "-j4", env=env)
         shutil.copyfile(build / directory / name, out / name)
         (out / name).chmod(0o755)
+    run(os.environ.get("CXX", "c++"), "-std=gnu++17", "-O2", "-Wall", "-Wextra", "-Werror",
+        "-I" + str(build), "-isystem", str(EROFS / "include"), "-I" + str(THIRD),
+        str(ROOT / "tools/erofs_manifest.cpp"), str(build / "lib/.libs/liberofs.a"),
+        str(objects / "liblz4.a"), "-o", str(out / "erofs-manifest"))
 
 
 def main():
