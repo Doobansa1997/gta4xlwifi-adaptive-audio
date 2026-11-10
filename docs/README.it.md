@@ -17,7 +17,7 @@ danni agli altoparlanti, ne una replica acustica misurata di One UI.
 - SoundBooster operativo nella riproduzione reale: stato 0, stereo float
   a 48 kHz, uscita speaker, frame 6772800 -> 6970560 e zero bypass.
 - Dolby originale mantenuto; motore e parametri SoundBooster invariati.
-- 77 test privati superati; senza firmware 71 superati e sei test opzionali saltati.
+- 79 test privati superati; senza firmware 73 superati e sei test opzionali saltati.
 
 L'attenuazione riguarda anche **sveglie, notifiche e chiamate**. Le curve cuffie
 e Bluetooth non cambiano. Il DSP puo compensare il livello: iniziare sempre

@@ -2,12 +2,15 @@
 """Download pinned public build dependencies; never download firmware."""
 
 import hashlib
-from pathlib import Path
+import io
+import json
+from pathlib import Path, PurePosixPath
 import tarfile
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 THIRD = ROOT / "third-party"
+FEC_TREE_SHA256 = "4ba76ca2b25f9ccaa4e30d069c1d57220570a9de76ae68237f63086c5b767018"
 SOURCES = {
     "avbtool.py": (
         "https://raw.githubusercontent.com/LineageOS/android_external_avb/91f1bfc948d35265c3b1e5e97bf1c410e65d18fa/avbtool.py",
@@ -32,19 +35,40 @@ SOURCES = {
 }
 
 
+def archive_tree_digest(content):
+    rows, seen = [], set()
+    with tarfile.open(fileobj=io.BytesIO(content), mode="r:gz") as archive:
+        for entry in archive:
+            path = PurePosixPath(entry.name)
+            if (path.is_absolute() or ".." in path.parts or entry.name in seen or
+                    not (entry.isfile() or entry.isdir())):
+                raise ValueError("Unsafe or duplicate source archive entry")
+            seen.add(entry.name)
+            checksum = hashlib.sha256(archive.extractfile(entry).read()).hexdigest() if entry.isfile() else None
+            rows.append([entry.name, entry.mode, "file" if entry.isfile() else "directory", checksum])
+    return hashlib.sha256(json.dumps(sorted(rows), separators=(",", ":"),
+                                     ensure_ascii=True).encode("ascii")).hexdigest()
+
+
+def verify_source(name, content):
+    # Gitiles varies tar timestamps/compression; pin every path, mode and byte instead.
+    actual = archive_tree_digest(content) if name == "fec.tar.gz" else hashlib.sha256(content).hexdigest()
+    expected = FEC_TREE_SHA256 if name == "fec.tar.gz" else SOURCES[name][1]
+    if actual != expected:
+        raise ValueError(f"Source checksum mismatch: {name}; remove only that file and retry")
+
+
 def main():
     THIRD.mkdir(exist_ok=True)
-    for name, (url, checksum) in SOURCES.items():
+    for name, (url, _) in SOURCES.items():
         target = THIRD / name
         if not target.exists():
             request = urllib.request.Request(url, headers={"User-Agent": "gta4xlwifi-adaptive-audio"})
             with urllib.request.urlopen(request, timeout=60) as response:
                 content = response.read()
-            if hashlib.sha256(content).hexdigest() != checksum:
-                raise ValueError(f"Downloaded source checksum mismatch: {name}")
+            verify_source(name, content)
             target.write_bytes(content)
-        if hashlib.sha256(target.read_bytes()).hexdigest() != checksum:
-            raise ValueError(f"Source checksum mismatch: {name}; remove only that file and retry")
+        verify_source(name, target.read_bytes())
         if name.endswith(".tar.gz"):
             directory = {
                 "erofs.tar.gz": "erofs-erofs-utils-f36cadb",

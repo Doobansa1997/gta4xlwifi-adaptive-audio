@@ -17,7 +17,10 @@ The final local set is `dist/soundbooster-final`: preflight/install/restore ZIPs
 and their manifest/checksums. Old distribution variants are removed; local
 firmware inputs and evidence remain ignored for reproducibility. The final
 profile accepts only reference, reviewed previous -9 dB or final -7 dB images.
-All **77 private tests pass**; public firmware-free tests pass 71 and skip six.
+All **79 private tests pass**; public firmware-free tests pass 73 and skip six.
+Two source-identity regressions verify that variable Gitiles archive timestamps
+do not change trusted FEC source identity, while changed bytes/modes/paths,
+duplicate entries, links and escaping paths are rejected.
 
 The sections below preserve chronological evidence, including earlier failures.
 They are not the current selected preset or a claim that those failures persist.

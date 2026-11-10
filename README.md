@@ -39,7 +39,7 @@ loudness. Start low and stop at the first audible distortion.
 - Two live snapshots: **6772800 -> 6970560 processed frames**, zero bypass.
 - Dolby and SoundBooster coexist in the running audio pipeline. No claim is
   made about long-term stability, all routes, fault paths or measured distortion.
-- **77 private tests pass**; firmware-free runs pass 71 and skip six optional
+- **79 private tests pass**; firmware-free runs pass 73 and skip six optional
   private-input tests. Full-size install/idempotence/restore checks also pass.
 
 The bridge handles HIDL configuration mask `0x1e` and loads the original engine

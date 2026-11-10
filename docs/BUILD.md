@@ -99,6 +99,15 @@ Reed-Solomon codec and Lineage's `avbtool.py`, verifies
 SHA256 and extracts them using Python's restricted tar-data filter.
 No firmware is downloaded. Sources go into ignored `third-party/`.
 
+Gitiles regenerates the FEC tar/gzip envelope with variable metadata. Its
+verification therefore pins the SHA256 of a sorted JSON tree containing every
+entry's exact path, mode, kind and file-content SHA256:
+`4ba76ca2b25f9ccaa4e30d069c1d57220570a9de76ae68237f63086c5b767018`.
+All 117 source files match the originally reviewed archive. Duplicate entries,
+links and escaping paths are refused. Only transport timestamps/compression and
+ownership fields are ignored; changed file contents, paths or modes still fail.
+Other dependencies retain exact downloaded-byte SHA256 verification.
+
 If GitHub regenerates a source archive with different bytes, the build will
 stop. Review the upstream commit/archive before updating its checksum;
 do not bypass verification.
